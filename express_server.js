@@ -39,15 +39,22 @@ app.get("/urls/:shortURL", (req, res) => {
   const templateVars = { shortURL: req.params.shortURL, longURL: urlDatabase[req.params.shortURL] };
   res.render("urls_show", templateVars);
 })
-
+//When clicking short url, redirect to long url
 app.get('/u/:shortURL', (req, res) => {
   const longURL = urlDatabase[req.params.shortURL]
   res.redirect(longURL);
 })
-
+//Delete
 app.post('/urls/:shortURL/delete', (req, res) => {
   delete urlDatabase[req.params.shortURL];
   res.redirect("/urls");
+})
+//Edit
+app.post('/urls/:shortURL', (req, res) => {
+  const shortURL = req.params.shortURL
+  const longURL = req.body.longURL;
+  urlDatabase[shortURL] = longURL
+  res.redirect(`/urls/${shortURL}`);
 })
 
 app.listen(PORT, () => {
