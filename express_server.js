@@ -7,6 +7,8 @@ const bodyParser = require("body-parser");
 const { response } = require("express");
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(cookieParser());
+const bcrypt = require('bcryptjs');
+const salt = bcrypt.genSaltSync(10);
 
 const users = { 
   "userRandomID": {
@@ -62,6 +64,7 @@ const findUrlByUser = (userID, object) => {
 app.get("/urls", (req, res) => {
   if (!req.cookies['user_id']) {
   res.render('urls_index', {user: "", urls: ""})
+  return;
   }
   const templateVars = { user: users[req.cookies["user_id"]], urls: findUrlByUser(users[req.cookies["user_id"]].id, urlDatabase)};
   res.render("urls_index", templateVars);
@@ -154,9 +157,11 @@ app.post('/register', (req, res) => {
     users[newUser] = {};
     users[newUser]['id'] = newUser
     users[newUser]['email'] = req.body.email
-    users[newUser]['password'] = req.body.password
+    const password = req.body.password
+    const hashedPassword = bcrypt.hashSync(password, salt);
+    users[newUser]['password'] = hashedPassword
     res.cookie('user_id', newUser);
-    console.log(users[newUser].email);
+    console.log(users);
     res.redirect('/urls');
   }
 })
@@ -175,9 +180,11 @@ app.get('/login', (req, res) => {
 app.post('/login', (req, res) => {
   console.log(users);
   const { email, password } = req.body
+  // console.log(password);
+  // console.log(userExists((req.body.email)).password)
   if (!userExists((req.body.email))) {
     res.status(403).send('Email not registered.')
-  } else if (userExists((req.body.email)) && password !== userExists((req.body.email)).password) {
+  } else if (userExists((req.body.email)) && !bcrypt.compareSync(password, userExists((req.body.email)).password)) {
     res.status(403).send('Password is incorrect.');
   }
   res.cookie('user_id', userExists((req.body.email)).id);
