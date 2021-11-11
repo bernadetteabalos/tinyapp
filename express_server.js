@@ -22,9 +22,15 @@ const users = {
 }
 
 const urlDatabase = {
-  "b2xVn2": "http://www.lighthouselabs.ca",
-  "9sm5xK": "http://www.google.com"
-};
+  "b2xVn2": {
+    longURL: "http://www.lighthouselabs.ca",
+    userID: "b2xVn2"
+  },
+  "9sm5xK": {
+    longURL: "http://www.google.com",
+    userID: "9sm5xK"
+  }
+}
 
 const userExists = (email) => {
   for (key in users) {
@@ -35,6 +41,16 @@ const userExists = (email) => {
   return false;
 }
 
+const findUrlByUser = (userID, object) => {
+  let result = {};
+  for (let key of Object.keys(object)) {
+    if (object[key].userID === userID) {
+      result[key] = object[key];
+    }
+  }
+  return result; 
+};
+
 // app.get("/", (req, res) => {
 //   res.send("Hello!");
 // });
@@ -44,48 +60,86 @@ const userExists = (email) => {
 // })
 
 app.get("/urls", (req, res) => {
-  const templateVars = { user: users[req.cookies["user_id"]], urls: urlDatabase };
+  if (!req.cookies['user_id']) {
+  res.render('urls_index', {user: "", urls: ""})
+  }
+  const templateVars = { user: users[req.cookies["user_id"]], urls: findUrlByUser(users[req.cookies["user_id"]].id, urlDatabase)};
   res.render("urls_index", templateVars);
 })
 
 app.get("/urls/new", (req, res) => {
   const templateVars = { user: users[req.cookies["user_id"]] }
-  res.render("urls_new", templateVars);
+  if (!templateVars.user) {
+    res.redirect('/login');
+  }  else {
+  res.render("urls_new", templateVars)
+  }
 });
 
 //Registration page
 app.get("/register", (req, res) => {
   const templateVars = { user: users[req.cookies["user_id"]], email: req.body.email, password: req.body.password }
-  res.render("registration", templateVars);
+  if (templateVars.user) {
+    res.redirect('/urls');
+  }  else {
+    res.render("registration", templateVars);
+  }
 });
 
+//New URL
 app.post("/urls", (req, res) => {
+  const templateVars = { user: users[req.cookies["user_id"]], email: req.body.email, password: req.body.password }
+  if (!templateVars.user) {
+    res.status(401).send('You must be logged in to do that.');
+    res.render(templateVars);
+  }  else {
   const shortURL = generateRandomString();
   const longURL = req.body.longURL
-  urlDatabase[shortURL] = longURL
+  urlDatabase[shortURL] = {longURL, userID: templateVars.user.id }
   res.redirect(`/urls/${shortURL}`);
+  }
 })
 
 app.get("/urls/:shortURL", (req, res) => {
-  const templateVars = { user: users[req.cookies["user_id"]], shortURL: req.params.shortURL, longURL: urlDatabase[req.params.shortURL] };
+  const templateVars = { user: users[req.cookies["user_id"]], shortURL: req.params.shortURL, longURL: urlDatabase[req.params.shortURL].longURL };
+  console.log(urlDatabase[req.params.shortURL].userID)
+  console.log(templateVars);
+  if (!templateVars.user || (urlDatabase[req.params.shortURL].userID !== templateVars.user.id)) {
+    res.status(403).send('This TinyURL does not belong to you.')
+    return;
+  }
   res.render("urls_show", templateVars);
 })
 //When clicking short url, redirect to long url
 app.get('/u/:shortURL', (req, res) => {
+  if (!urlDatabase[req.params.shortURL]) {
+    res.status(403).send('This TinyURL does not exist.')
+    return;
+  }
   const templateVars = { user: users[req.cookies["user_id"]] }
-  const longURL = urlDatabase[req.params.shortURL]
+  const longURL = urlDatabase[req.params.shortURL].longURL
   res.redirect(longURL), templateVars;
 })
 //Delete
 app.post('/urls/:shortURL/delete', (req, res) => {
+  const templateVars = { user: users[req.cookies["user_id"]], email: req.body.email, password: req.body.password }
+  if (!templateVars.user || (urlDatabase[req.params.shortURL].userID !== templateVars.user.id)) {
+    res.status(403).send('You may not delete. This TinyURL does not belong to you.')
+    return;
+  }
   delete urlDatabase[req.params.shortURL];
   res.redirect("/urls");
 })
 //Edit
 app.post('/urls/:shortURL', (req, res) => {
+  const templateVars = { user: users[req.cookies["user_id"]], email: req.body.email, password: req.body.password }
+  if (!templateVars.user || (urlDatabase[req.params.shortURL].userID !== templateVars.user.id)) {
+    res.status(403).send('You may not edit. This TinyURL does not belong to you.')
+    return;
+  }
   const shortURL = req.params.shortURL
   const longURL = req.body.longURL;
-  urlDatabase[shortURL] = longURL
+  urlDatabase[shortURL] = {longURL, userID: templateVars.user.id }
   res.redirect(`/urls/${shortURL}`);
 })
 
@@ -110,8 +164,12 @@ app.post('/register', (req, res) => {
 //LoginPage
 app.get('/login', (req, res) => {
   const templateVars = { user: users[req.cookies["user_id"]], email: req.body.email, password: req.body.password }
+  if (templateVars.user) {
+    res.redirect('/urls');
+  } else {
   res.render("login", templateVars);
-})
+  }
+});
 
 //Login
 app.post('/login', (req, res) => {
