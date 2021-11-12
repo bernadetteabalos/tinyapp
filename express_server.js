@@ -91,7 +91,7 @@ app.post("/urls", (req, res) => {
   const templateVars = { user: users[req.session.user_id], email: req.body.email, password: req.body.password };
   if (!templateVars.user) {
     res.status(401).send('You must be logged in to do that.');
-    res.render(templateVars);
+    return;
   }  else {
     const shortURL = generateRandomString();
     const longURL = req.body.longURL;
@@ -152,8 +152,10 @@ app.post('/urls/:shortURL', (req, res) => {
 app.post('/register', (req, res) => {
   if (req.body.email === "" || req.body.password === "") {
     res.status(400).send('Invalid email or password.');
+    return;
   } else if (getUserByEmail(req.body.email, users)) {
     res.status(400).send("Email already exists.");
+    return;
   } else {
     const newUser = generateRandomString();
     users[newUser] = {
