@@ -44,6 +44,8 @@ const urlDatabase = {
   }
 };
 
+
+// ---- SITE FUNCTIONING // ROUTES ---- //
 //Home
 app.get("/", (req, res) => {
   if (req.session.user_id) {
@@ -55,12 +57,12 @@ app.get("/", (req, res) => {
 
 //List of urls
 app.get("/urls", (req, res) => {
-  if (!req.session.user_id) {
+  const user = users[req.session.user_id];
+  if (!user) {
     res.status(403).send('You must be logged in to see this page.');
-    res.render('urls_index', {user: "", urls: ""});
     return;
   }
-  const templateVars = { user: users[req.session.user_id], urls: findUrlByUser(users[req.session.user_id].id, urlDatabase)};
+  const templateVars = { user, urls: findUrlByUser(user.id, urlDatabase)};
   res.render("urls_index", templateVars);
   
 });
@@ -79,10 +81,9 @@ app.get("/urls/new", (req, res) => {
 app.get("/register", (req, res) => {
   const templateVars = { user: users[req.session.user_id], email: req.body.email, password: req.body.password };
   if (templateVars.user) {
-    res.redirect('/urls');
-  }  else {
-    res.render("registration", templateVars);
+    return res.redirect('/urls');
   }
+  res.render("registration", templateVars);
 });
 
 //New URL
@@ -101,12 +102,14 @@ app.post("/urls", (req, res) => {
 
 //Short url page display
 app.get("/urls/:shortURL", (req, res) => {
-  if (!urlDatabase[req.params.shortURL]) {
+  const { shortURL } = req.params;
+  if (!urlDatabase[shortURL]) {
     res.status(403).send('This TinyURL does not exist.');
     return;
   }
-  const templateVars = { user: users[req.session.user_id], shortURL: req.params.shortURL, longURL: urlDatabase[req.params.shortURL].longURL };
-  if (!templateVars.user || (urlDatabase[req.params.shortURL].userID !== templateVars.user.id)) {
+  const user = users[req.session.user_id];
+  const templateVars = { user, shortURL, longURL: urlDatabase[shortURL].longURL };
+  if (!user || (urlDatabase[shortURL].userID !== user.id)) {
     res.status(403).send('This TinyURL does not belong to you.');
     return;
   }
@@ -124,8 +127,8 @@ app.get('/u/:shortURL', (req, res) => {
 });
 //Delete
 app.post('/urls/:shortURL/delete', (req, res) => {
-  const templateVars = { user: users[req.session.user_id], email: req.body.email, password: req.body.password };
-  if (!templateVars.user || (urlDatabase[req.params.shortURL].userID !== templateVars.user.id)) {
+  const user = users[req.session.user_id];
+  if (!user || (urlDatabase[req.params.shortURL].userID !== user.id)) {
     res.status(403).send('You may not delete. This TinyURL does not belong to you.');
     return;
   }
@@ -134,14 +137,14 @@ app.post('/urls/:shortURL/delete', (req, res) => {
 });
 //Edit
 app.post('/urls/:shortURL', (req, res) => {
-  const templateVars = { user: users[req.session.user_id], email: req.body.email, password: req.body.password };
-  if (!templateVars.user || (urlDatabase[req.params.shortURL].userID !== templateVars.user.id)) {
+  const user = users[req.session.user_id];
+  if (!user || (urlDatabase[req.params.shortURL].userID !== user.id)) {
     res.status(403).send('You may not edit. This TinyURL does not belong to you.');
     return;
   }
   const shortURL = req.params.shortURL;
   const longURL = req.body.longURL;
-  urlDatabase[shortURL] = {longURL, userID: templateVars.user.id };
+  urlDatabase[shortURL] = {longURL, userID: user.id };
   res.redirect(`/urls/${shortURL}`);
 });
 
@@ -153,12 +156,11 @@ app.post('/register', (req, res) => {
     res.status(400).send("Email already exists.");
   } else {
     const newUser = generateRandomString();
-    users[newUser] = {};
-    users[newUser]['id'] = newUser;
-    users[newUser]['email'] = req.body.email;
-    const password = req.body.password;
-    const hashedPassword = bcrypt.hashSync(password, salt);
-    users[newUser]['password'] = hashedPassword;
+    users[newUser] = {
+      id: newUser,
+      email: req.body.email,
+      password: bcrypt.hashSync(req.body.password, salt)
+    };
     req.session.user_id = newUser;
     res.redirect('/urls');
   }
@@ -166,8 +168,9 @@ app.post('/register', (req, res) => {
 
 //Login Page Display
 app.get('/login', (req, res) => {
-  const templateVars = { user: users[req.session.user_id], email: req.body.email, password: req.body.password };
-  if (templateVars.user) {
+  const user = users[req.session.user_id];
+  const templateVars = { user, email: req.body.email, password: req.body.password };
+  if (user) {
     res.redirect('/urls');
   } else {
     res.render("login", templateVars);
@@ -177,12 +180,15 @@ app.get('/login', (req, res) => {
 //Login Functioning
 app.post('/login', (req, res) => {
   const { email, password } = req.body;
-  if (!getUserByEmail(email, users)) {
+  const user = getUserByEmail(email, users);
+  if (!user) {
     res.status(403).send('Email not registered.');
-  } else if (getUserByEmail(email, users) && !bcrypt.compareSync(password, getUserByEmail(email, users).password)) {
+    return;
+  } else if (!bcrypt.compareSync(password, user.password)) {
     res.status(403).send('Password is incorrect.');
+    return;
   }
-  req.session.user_id = getUserByEmail(email, users).id;
+  req.session.user_id = user.id;
   res.redirect('/urls');
 });
 
